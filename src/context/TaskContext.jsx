@@ -5,7 +5,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { storage } from '../utils/storage';
-import { getInitialDemoTasks } from '../utils/sampleData';
 
 const TaskContext = createContext(null);
 
@@ -16,10 +15,10 @@ export function TaskProvider({ children }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('dueDate-asc');
-  const [viewMode, setViewMode] = useState('board'); // 'board' or 'list'
+  const [viewMode, setViewMode] = useState('board'); // 'board' o 'list'
   const [toast, setToast] = useState(null);
 
-  // Show auto-dismissing toast notifications
+  // Notificaciones automáticas Toast
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type });
     const timer = setTimeout(() => {
@@ -32,7 +31,7 @@ export function TaskProvider({ children }) {
     setToast(null);
   }, []);
 
-  // Load user-isolated tasks upon user session change
+  // Cargar tareas del usuario actual (Inicia completamente limpio en 0 tareas)
   useEffect(() => {
     if (!currentUser) {
       setTasks([]);
@@ -41,23 +40,27 @@ export function TaskProvider({ children }) {
 
     const savedTasks = storage.getTasksForUser(currentUser.id);
     if (savedTasks === null) {
-      // First time user initialization with sample data
-      const initial = getInitialDemoTasks();
-      storage.saveTasksForUser(currentUser.id, initial);
-      setTasks(initial);
+      // Todo usuario nuevo inicia con 0 tareas
+      storage.saveTasksForUser(currentUser.id, []);
+      setTasks([]);
     } else {
-      setTasks(savedTasks);
+      // Limpia automáticamente tareas demo de pruebas anteriores
+      const cleaned = savedTasks.filter((t) => !t.id?.startsWith('demo-task-'));
+      if (cleaned.length !== savedTasks.length) {
+        storage.saveTasksForUser(currentUser.id, cleaned);
+      }
+      setTasks(cleaned);
     }
   }, [currentUser]);
 
-  // Persist tasks to LocalStorage whenever tasks state changes
+  // Persistir cambios en LocalStorage por usuario
   const persistTasks = useCallback((newTasks) => {
     if (!currentUser) return;
     setTasks(newTasks);
     storage.saveTasksForUser(currentUser.id, newTasks);
   }, [currentUser]);
 
-  // --- CRUD ACTIONS ---
+  // --- ACCIONES CRUD ---
 
   const addTask = useCallback((taskData) => {
     const newTask = {
@@ -126,7 +129,7 @@ export function TaskProvider({ children }) {
     setSortBy('dueDate-asc');
   }, []);
 
-  // --- STATS OVERVIEW ---
+  // --- ESTADÍSTICAS Y PROGRESO ---
   const stats = useMemo(() => {
     const total = tasks.length;
     const pending = tasks.filter((t) => t.status === 'pending').length;
@@ -143,11 +146,11 @@ export function TaskProvider({ children }) {
     };
   }, [tasks]);
 
-  // --- FILTERED & SORTED TASKS ---
+  // --- TAREAS FILTRADAS Y ORDENADAS ---
   const filteredTasks = useMemo(() => {
     return tasks
       .filter((task) => {
-        // Search query filter (matches title or description)
+        // Búsqueda por texto en título, descripción o categoría
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase();
           const matchTitle = task.title.toLowerCase().includes(query);
@@ -156,12 +159,12 @@ export function TaskProvider({ children }) {
           if (!matchTitle && !matchDesc && !matchCat) return false;
         }
 
-        // Status filter
+        // Filtro por estado
         if (statusFilter !== 'all' && task.status !== statusFilter) {
           return false;
         }
 
-        // Priority filter
+        // Filtro por prioridad
         if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
           return false;
         }
